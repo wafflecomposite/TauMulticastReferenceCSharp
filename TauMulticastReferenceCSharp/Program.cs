@@ -18,7 +18,8 @@ namespace TauMulticastReferenceCSharp
             while (true) {
                 user_input = Console.ReadLine();
 
-                if (user_input == "q") {
+                if (user_input == "q")
+                {
                     break;
                 }
                 else if (user_input == "r a")
@@ -48,6 +49,9 @@ namespace TauMulticastReferenceCSharp
                     tau_multicast.MulticastMappingConsoleWrite = false;
                     tau_multicast.MulticastDebugConsoleWrite = false;
                     tau_multicast.MulticastLogsConsoleWrite = false;
+                }
+                else {
+                    Console.WriteLine("unknown input");
                 }
             }
             

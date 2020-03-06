@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
 using System.IO;
+using System.Text;
 
 namespace TauMulticastReferenceCSharp
 {
@@ -54,7 +55,7 @@ namespace TauMulticastReferenceCSharp
 
         public class Sensor
         {
-            public string id;
+            public int id;
             public string mapping;
             public bool active;
             public bool bad_coords;
@@ -70,7 +71,7 @@ namespace TauMulticastReferenceCSharp
 
         public class Module
         {
-            public string serial;
+            public int serial;
             public byte sensors_active;
             public byte data_integrity;
             public List<Sensor> sensors;
@@ -98,67 +99,99 @@ namespace TauMulticastReferenceCSharp
 
             public DataPacket()
             {
+                module_count = 0;
                 modules = new List<Module>();
             }
 
-            public static DataPacket Parse(MemoryStream packet_content_stream)
+            public void ParseUpdate(MemoryStream packet_content_stream)
             {
-                var packet = new DataPacket();
-
-                //int bytecounter = 0;
-                //MemoryStream stream = new MemoryStream();
                 BinaryReader br = new BinaryReader(packet_content_stream);
-                packet.module_count = br.ReadByte();
+                module_count = br.ReadByte();
 
-
-                for (int i = 0; i < packet.module_count; i++)
+                for (int i = 0; i < module_count; i++)
                 {
-                    var module = new Module
-                    {
-                        serial = br.ReadUInt16().ToString("x"),
-                        sensors_active = br.ReadByte(),
-                        data_integrity = br.ReadByte()
+                    Module cur_module = null;
+                    int cur_module_serial = br.ReadUInt16();
 
-                    };
+                    foreach (Module module in modules)
+                    {
+                        if (module.serial == cur_module_serial) {
+                            cur_module = module;
+                            break;
+                        }
+                    }
+
+                    if (cur_module == null) {
+
+                        cur_module = new Module
+                        {
+                            serial = cur_module_serial
+                        };
+                        modules.Add(cur_module);
+                    }
+
+                    cur_module.sensors_active = br.ReadByte();
+                    cur_module.data_integrity = br.ReadByte();
+
+                    foreach (var sensor in cur_module.sensors)
+                    {
+                        sensor.active = false;
+                    }
 
                     for (int s = 0; s < 6; s++)
                     {
-                        var sensor = new Sensor
-                        {
-                            id = module.serial + s.ToString(),
-                            active = (module.sensors_active & (1 << s)) > 0,
-                            bad_coords = (module.data_integrity & (1 << s)) > 0
-                        };
+                        Sensor cur_sensor = null;
+                        int cur_sensor_id = cur_module.serial * 16 + s;
 
-                        if (sensor.active)
+                        foreach (var sensor in cur_module.sensors)
                         {
-                            sensor.q0 = br.ReadSingle();
-                            sensor.q1 = br.ReadSingle();
-                            sensor.q2 = br.ReadSingle();
-                            sensor.q3 = br.ReadSingle();
-                            sensor.x = br.ReadSingle();
-                            sensor.y = br.ReadSingle();
-                            sensor.z = br.ReadSingle();
+                            if (sensor.id == cur_sensor_id)
+                            {
+                                cur_sensor = sensor;
+                                break;
+                            }
+                        }
+
+                        if (cur_sensor == null) {
+                            cur_sensor = new Sensor
+                            {
+                                id = cur_sensor_id
+                            };
+                            cur_module.sensors.Add(cur_sensor);
+                        }
+
+                        cur_sensor.active = (cur_module.sensors_active & (1 << s)) > 0;
+                        cur_sensor.bad_coords = (cur_module.data_integrity & (1 << s)) > 0;
+
+                        if (cur_sensor.active)
+                        {
+                            cur_sensor.q0 = br.ReadSingle();
+                            cur_sensor.q1 = br.ReadSingle();
+                            cur_sensor.q2 = br.ReadSingle();
+                            cur_sensor.q3 = br.ReadSingle();
+                            cur_sensor.x = br.ReadSingle();
+                            cur_sensor.y = br.ReadSingle();
+                            cur_sensor.z = br.ReadSingle();
 
                             int bonelength = br.ReadInt32();
                             if (bonelength > 0)
                             {
+                                while (bonelength > cur_sensor.bones.Count) {
+                                    cur_sensor.bones.Add(new IKBone());
+                                }
+
                                 for (int bl = 0; bl < bonelength; bl++)
                                 {
-                                    var bone = new IKBone();
-                                    bone.x = br.ReadSingle();
-                                    bone.y = br.ReadSingle();
-                                    bone.z = br.ReadSingle();
-                                    sensor.bones.Add(bone);
+                                    var cur_bone = cur_sensor.bones[bl];
+                                    cur_bone.x = br.ReadSingle();
+                                    cur_bone.y = br.ReadSingle();
+                                    cur_bone.z = br.ReadSingle();
                                 }
                             }
-                            module.sensors.Add(sensor);
                         }
                     }
-                    packet.modules.Add(module);
-
                 }
-                return packet;
+                //br.Dispose();
             }
 
             public override string ToString() {
@@ -166,17 +199,75 @@ namespace TauMulticastReferenceCSharp
                 readable_data += String.Format("number of modules: {0}\n", module_count);
                 foreach (var m in modules)
                 {
-                    readable_data += String.Format("module {0}:\n", m.serial);
+                    readable_data += String.Format("module {0}:\n", m.serial.ToString("x"));
                     foreach (var s in m.sensors)
                     {
-                        readable_data += String.Format("  sensor {0}: \n", s.id);
-                        readable_data += String.Format("    active: {0}, bad_coords: {8}, \n    pos({5:+000.00;-000.00} {6:+000.00;-000.00} {7:+000.00;-000.00})\n    quat({1:+000.00;-000.00} {2:+000.00;-000.00} {3:+000.00;-000.00} {4:+000.00;-000.00})\n", s.active, s.q0, s.q1, s.q2, s.q3, s.x, s.y, s.z, s.bad_coords);
+                        if (s.active == false) {
+                            continue;
+                        }
+                        readable_data += String.Format("  sensor {0}: \n", s.id.ToString("x"));
+                        readable_data += String.Format("    active: {0}, bad_coords: {8}, mapping: [{9}] \n    pos({5:+000.00;-000.00} {6:+000.00;-000.00} {7:+000.00;-000.00})\n    quat({1:+000.00;-000.00} {2:+000.00;-000.00} {3:+000.00;-000.00} {4:+000.00;-000.00})\n", s.active, s.q0, s.q1, s.q2, s.q3, s.x, s.y, s.z, s.bad_coords, s.mapping);
                         foreach (var b in s.bones)
                         {
                             readable_data += String.Format("    bone: pos({0:+000.00;-000.00} {1:+000.00;-000.00} {2:+000.00;-000.00})\n", b.x, b.y, b.z);
                         }
                     }
                 }
+                return readable_data;
+            }
+        }
+
+        public class MappingPacket
+        {
+            public static Dictionary<int, string> mapping;
+
+            public MappingPacket()
+            {
+                mapping = new Dictionary<int, string>();
+            }
+
+            public static MappingPacket Parse(byte[] received_bytes) {
+
+                var packet = new MappingPacket();
+                string converted = Encoding.UTF8.GetString(received_bytes, 0, received_bytes.Length);
+
+                using (StringReader reader = new StringReader(converted))
+                {
+                    string line = string.Empty;
+                    do
+                    {
+                        line = reader.ReadLine();
+                        if (line != null)
+                        {
+                            var spl_line = line.Split('=');
+                            var map = spl_line[1].Replace("\"", "");
+                            var sensid = Convert.ToInt32(spl_line[0], 16);
+
+                            if (!mapping.ContainsKey(sensid))
+                            {
+                                mapping.Add(sensid, map);
+                            }
+                            else
+                            {
+                                mapping[sensid] = map;
+                            }
+                        }
+
+                    } while (line != null);
+                }
+
+                return packet;
+            }
+
+            public override string ToString()
+            {
+                string readable_data = "";
+
+                foreach (KeyValuePair<int, string> entry in mapping)
+                {
+                    readable_data += String.Format("{0}={1}\n", entry.Key, entry.Value);
+                }
+
                 return readable_data;
             }
         }

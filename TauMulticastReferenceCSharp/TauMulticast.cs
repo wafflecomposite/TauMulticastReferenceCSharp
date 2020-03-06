@@ -28,6 +28,9 @@ namespace TauMulticastReferenceCSharp
         public TauObjects.AnnouncerDataObj AnnouncerData;
 
         public TauObjects.DataPacket datapacket;
+        public TauObjects.DataPacket datapacket_temp;
+        public TauObjects.MappingPacket mappingpacket;
+        public TauObjects.MappingPacket mappingpacket_temp;
 
         private UdpClient MulticastAnnouncerClient,
             MulticastDataClient,
@@ -65,6 +68,8 @@ namespace TauMulticastReferenceCSharp
             MulticastAnnouncerThread.Start();
             MulticastDataThread = new Thread(() => MulticastDataTask()) { IsBackground = true };
             MulticastDataThread.Start();
+            MulticastMappingThread = new Thread(() => MulticastMappingTask()) { IsBackground = true };
+            MulticastMappingThread.Start();
         }
 
         private void InitializeNICaddresses() {
@@ -223,27 +228,83 @@ namespace TauMulticastReferenceCSharp
 
             DataMemoryStream = new MemoryStream();
 
+            byte[] receivedBytes = new byte[1400];
+
+
             while (GeneralConnectionStatus == 1)
             {
                 if (MulticastDataClient.Available > 0)
                 {
-                    byte[] receivedBytes = MulticastDataClient.Receive(ref localEp);
-
-                    string receivedString = BitConverter.ToString(receivedBytes);
+                    receivedBytes = MulticastDataClient.Receive(ref localEp);
+                    //int resp_length = MulticastDataClient.Client.ReceiveFrom(receivedBytes, ref localEp);
 
                     DataMemoryStream.Write(receivedBytes, 0, receivedBytes.Length);
                     DataMemoryStream.Position = 0;
-                    datapacket = TauObjects.DataPacket.Parse(DataMemoryStream);
+
+                    if (datapacket_temp == null)
+                    {
+                        datapacket_temp = new TauObjects.DataPacket();
+                    }
+                    if (datapacket == null)
+                    {
+                        datapacket = new TauObjects.DataPacket();
+                    }
+
+                    datapacket_temp.ParseUpdate(DataMemoryStream);
                     DataMemoryStream.SetLength(0);
+
+                    lock (datapacket) {
+
+                    }
+                    
 
                     if (MulticastDataConsoleWrite)
                     {
-                        Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", datapacket.ToString()));
+                        Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", datapacket_temp.ToString()));
                     }
 
                 }
 
                 Thread.Sleep(DataThreadSleep);
+            }
+        }
+
+        private void MulticastMappingTask()
+        {
+            MulticastMappingClient = new UdpClient();
+
+            while (AnnouncerData == null)
+            {
+                Thread.Sleep(AnnouncerThreadSleep);
+            }
+
+            string[] splitted_group = AnnouncerData.MulticastMappingGroup.Split(':');
+
+            IPAddress MulticastMappingGroupAddress = IPAddress.Parse(splitted_group[0]);
+            int MulticastMappingPort = int.Parse(splitted_group[1]);
+
+            IPEndPoint localEp = ClientJoinMulticast(MulticastMappingClient, MulticastMappingGroupAddress, MulticastMappingPort);
+
+            MappingMemoryStream = new MemoryStream();
+
+            while (GeneralConnectionStatus == 1)
+            {
+                if (MulticastMappingClient.Available > 0)
+                {
+                    byte[] receivedBytes = MulticastMappingClient.Receive(ref localEp);
+
+                    string receivedString = BitConverter.ToString(receivedBytes);
+
+                    mappingpacket = TauObjects.MappingPacket.Parse(receivedBytes);
+
+                    if (MulticastMappingConsoleWrite)
+                    {
+                        Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", mappingpacket.ToString()));
+                    }
+
+                }
+
+                Thread.Sleep(MappingThreadSleep);
             }
         }
     }
