@@ -21,15 +21,16 @@ namespace TauMulticastReferenceCSharp
         private MemoryStream AnnouncerMemoryStream,
             DataMemoryStream,
             MappingMemoryStream,
-            LogsMemoryStream,
             DebugMemoryStream;
 
-        private TauObjects.AnnouncerDataSerializer AnnouncerDataSerializer;
-        public TauObjects.AnnouncerDataObj AnnouncerData;
+        private BinaryReader DataMemoryStreamReader;
 
-        public TauObjects.DataPacket datapacket;
-        public TauObjects.DataPacket datapacket_temp;
-        public TauObjects.MappingPacket mappingpacket;
+        private TauObjects.AnnouncerDataSerializer AnnouncerDataSerializer = new TauObjects.AnnouncerDataSerializer();
+        public TauObjects.AnnouncerDataObj AnnouncerData = new TauObjects.AnnouncerDataObj();
+
+        public TauObjects.DataPacket datapacket = new TauObjects.DataPacket();
+        public TauObjects.DataPacket datapacket_temp = new TauObjects.DataPacket();
+        public TauObjects.MappingPacket mappingpacket = new TauObjects.MappingPacket();
 
         private UdpClient MulticastAnnouncerClient,
             MulticastDataClient,
@@ -52,13 +53,21 @@ namespace TauMulticastReferenceCSharp
         public int AnnouncerThreadSleep = 100;
         public int DataThreadSleep = 5;
         public int MappingThreadSleep = 100;
-        public int LogsThreadSleep = 100;
+        public int LogsThreadSleep = 10;
         public int DebugThreadSleep = 5;
+
+        private bool EnableLogsThread = false;
+        private bool EnableDebugThread = false;
+
+        private List<string> Logs = new List<string>();
+        private int LogsMaxLen = 100;
 
         private List<System.Net.IPAddress> NICaddresses;  //part of windows multicast workaround - list of network interface addresses
 
-        public TauMulticast() {
+        public TauMulticast(bool logs = false, bool debug = false) {
             InitializeNICaddresses();
+            EnableLogsThread = logs;
+            EnableDebugThread = debug;
         }
 
         public void Connect()
@@ -69,6 +78,11 @@ namespace TauMulticastReferenceCSharp
             MulticastDataThread.Start();
             MulticastMappingThread = new Thread(() => MulticastMappingTask()) { IsBackground = true };
             MulticastMappingThread.Start();
+
+            if (EnableLogsThread) {
+                MulticastLogsThread = new Thread(() => MulticastLogsTask()) { IsBackground = true };
+                MulticastLogsThread.Start();
+            }
         }
 
         private void InitializeNICaddresses() {
@@ -197,15 +211,19 @@ namespace TauMulticastReferenceCSharp
 
                     AnnouncerMemoryStream.Write(receivedBytes, 0, receivedBytes.Length);
                     AnnouncerMemoryStream.Position = 0;
-                    if (AnnouncerDataSerializer == null) { 
-                        AnnouncerDataSerializer = new TauObjects.AnnouncerDataSerializer();
-                    }
-                    AnnouncerData = (TauObjects.AnnouncerDataObj)AnnouncerDataSerializer.JsonSerializer.ReadObject(AnnouncerMemoryStream);
-                    AnnouncerMemoryStream.SetLength(0);
 
-                    if (MulticastAnnouncerConsoleWrite) {
-                        Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", AnnouncerData.ToString()));
+                    lock (AnnouncerData) {
+                        
+                        AnnouncerData = (TauObjects.AnnouncerDataObj)AnnouncerDataSerializer.JsonSerializer.ReadObject(AnnouncerMemoryStream);
+                        AnnouncerData.HubIP = localEp.Address.ToString();
+                        AnnouncerData.Initialized = true;
+
+                        if (MulticastAnnouncerConsoleWrite)
+                        {
+                            Console.WriteLine(String.Format("= = = = = = = = = =\nIP: {0}\n{1}", localEp.Address.ToString(), AnnouncerData.ToString()));
+                        }
                     }
+                    AnnouncerMemoryStream.SetLength(0);
                 }
 
                 Thread.Sleep(AnnouncerThreadSleep);
@@ -216,7 +234,7 @@ namespace TauMulticastReferenceCSharp
         {
             MulticastDataClient = new UdpClient();
 
-            while (AnnouncerData == null) {
+            while (AnnouncerData == null || AnnouncerData.Initialized == false) {
                 Thread.Sleep(AnnouncerThreadSleep);
             }
 
@@ -228,6 +246,7 @@ namespace TauMulticastReferenceCSharp
             IPEndPoint localEp = ClientJoinMulticast(MulticastDataClient, MulticastDataGroupAddress, MulticastDataPort);
 
             DataMemoryStream = new MemoryStream();
+            DataMemoryStreamReader = new BinaryReader(DataMemoryStream);
 
             byte[] receivedBytes = new byte[1400];
 
@@ -242,24 +261,15 @@ namespace TauMulticastReferenceCSharp
                     DataMemoryStream.Write(receivedBytes, 0, receivedBytes.Length);
                     DataMemoryStream.Position = 0;
 
-                    if (datapacket_temp == null)
-                    {
-                        datapacket_temp = new TauObjects.DataPacket();
-                    }
-                    if (datapacket == null)
-                    {
-                        datapacket = new TauObjects.DataPacket();
-                    }
-
-                    if (mappingpacket != null)
+                    if (mappingpacket != null && mappingpacket.initialized)
                     {
                         lock (mappingpacket)
                         {
-                            datapacket_temp.ParseUpdate(DataMemoryStream, mappingpacket);
+                            datapacket_temp.ParseUpdate(DataMemoryStreamReader, mappingpacket);
                         }
                     }
                     else {
-                        datapacket_temp.ParseUpdate(DataMemoryStream);
+                        datapacket_temp.ParseUpdate(DataMemoryStreamReader);
                     }
 
                     DataMemoryStream.SetLength(0);
@@ -269,7 +279,7 @@ namespace TauMulticastReferenceCSharp
 
                         if (MulticastDataConsoleWrite)
                         {
-                            Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", datapacket_temp.ToString()));
+                            //Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", datapacket_temp.ToString()));
                             Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", datapacket.ToString()));
                         }
                     }
@@ -283,7 +293,7 @@ namespace TauMulticastReferenceCSharp
         {
             MulticastMappingClient = new UdpClient();
 
-            while (AnnouncerData == null)
+            while (AnnouncerData == null || AnnouncerData.Initialized == false)
             {
                 Thread.Sleep(AnnouncerThreadSleep);
             }
@@ -303,13 +313,6 @@ namespace TauMulticastReferenceCSharp
                 {
                     byte[] receivedBytes = MulticastMappingClient.Receive(ref localEp);
 
-                    string receivedString = BitConverter.ToString(receivedBytes);
-
-                    if (mappingpacket == null)
-                    {
-                        mappingpacket = new TauObjects.MappingPacket();
-                    }
-
                     lock (mappingpacket) {
                         mappingpacket.Parse(receivedBytes);
 
@@ -321,6 +324,52 @@ namespace TauMulticastReferenceCSharp
                 }
 
                 Thread.Sleep(MappingThreadSleep);
+            }
+        }
+
+        private void MulticastLogsTask()
+        {
+            MulticastLogsClient = new UdpClient();
+
+            while (AnnouncerData == null || AnnouncerData.Initialized == false)
+            {
+                Thread.Sleep(AnnouncerThreadSleep);
+            }
+
+            string[] splitted_group = AnnouncerData.MulticastLogsGroup.Split(':');
+
+            IPAddress MulticastLogsGroupAddress = IPAddress.Parse(splitted_group[0]);
+            int MulticastLogsPort = int.Parse(splitted_group[1]);
+
+            IPEndPoint localEp = ClientJoinMulticast(MulticastLogsClient, MulticastLogsGroupAddress, MulticastLogsPort);
+
+            while (GeneralConnectionStatus == 1)
+            {
+                if (MulticastLogsClient.Available > 0)
+                {
+                    byte[] receivedBytes = MulticastLogsClient.Receive(ref localEp);
+
+                    string receivedString = Encoding.UTF8.GetString(receivedBytes, 0, receivedBytes.Length);
+
+                    lock (Logs) {
+
+                        Logs.Add(receivedString);
+                        if (Logs.Count > LogsMaxLen) {
+                            Logs.RemoveAt(0);
+                        }
+
+                        if (MulticastLogsConsoleWrite)
+                        {
+                            foreach (var logstr in Logs) {
+                                Console.WriteLine(receivedString);
+                            }
+                            Logs.Clear();
+                        }
+                    }
+
+                }
+
+                Thread.Sleep(LogsThreadSleep);
             }
         }
     }

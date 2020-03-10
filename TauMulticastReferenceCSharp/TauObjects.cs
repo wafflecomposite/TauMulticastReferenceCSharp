@@ -38,6 +38,9 @@ namespace TauMulticastReferenceCSharp
             [DataMember(Name = "theta_ver")]
             public string ThetaVersion { get; set; }
 
+            public bool Initialized { get; set; }
+            public string HubIP { get; set; }
+
             public override string ToString()
             {
                 return String.Format("AvailableRevision: {0}\nCurrentRevision: {1}\nCommandServerVersion: {2}\n" +
@@ -96,6 +99,7 @@ namespace TauMulticastReferenceCSharp
         {
             public int module_count;
             public List<Module> modules;
+            public bool initialized;
 
             public DataPacket()
             {
@@ -103,9 +107,9 @@ namespace TauMulticastReferenceCSharp
                 modules = new List<Module>();
             }
 
-            public void ParseUpdate(MemoryStream packet_content_stream, MappingPacket mapping_packet = null)
+            public void ParseUpdate(BinaryReader br, MappingPacket mapping_packet = null)
             {
-                BinaryReader br = new BinaryReader(packet_content_stream);
+                //BinaryReader br = new BinaryReader(packet_content_stream);
                 module_count = br.ReadByte();
 
                 for (int i = 0; i < module_count; i++)
@@ -196,8 +200,8 @@ namespace TauMulticastReferenceCSharp
                         }
                     }
                 }
-                //br.Dispose();
-            }
+                initialized = true;
+        }
 
             public void CopyFrom(DataPacket _packet)
             {
@@ -293,7 +297,7 @@ namespace TauMulticastReferenceCSharp
                         }
                     }
                 }
-                //br.Dispose();
+                initialized = true;
             }
 
             public override string ToString() {
@@ -322,6 +326,7 @@ namespace TauMulticastReferenceCSharp
         public class MappingPacket
         {
             public Dictionary<int, string> mapping;
+            public bool initialized;
 
             public MappingPacket()
             {
@@ -357,6 +362,7 @@ namespace TauMulticastReferenceCSharp
 
                     } while (line != null);
                 }
+                initialized = true;
             }
 
             public override string ToString()

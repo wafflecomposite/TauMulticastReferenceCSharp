@@ -10,7 +10,7 @@ namespace TauMulticastReferenceCSharp
     {
         static void Main(string[] args)
         {
-            var tau_multicast = new TauMulticast();
+            var tau_multicast = new TauMulticast(logs: true, debug: true);
             tau_multicast.Connect();
 
             string user_input = "";
