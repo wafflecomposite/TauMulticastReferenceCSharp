@@ -30,7 +30,6 @@ namespace TauMulticastReferenceCSharp
         public TauObjects.DataPacket datapacket;
         public TauObjects.DataPacket datapacket_temp;
         public TauObjects.MappingPacket mappingpacket;
-        public TauObjects.MappingPacket mappingpacket_temp;
 
         private UdpClient MulticastAnnouncerClient,
             MulticastDataClient,
@@ -198,7 +197,9 @@ namespace TauMulticastReferenceCSharp
 
                     AnnouncerMemoryStream.Write(receivedBytes, 0, receivedBytes.Length);
                     AnnouncerMemoryStream.Position = 0;
-                    AnnouncerDataSerializer = new TauObjects.AnnouncerDataSerializer();
+                    if (AnnouncerDataSerializer == null) { 
+                        AnnouncerDataSerializer = new TauObjects.AnnouncerDataSerializer();
+                    }
                     AnnouncerData = (TauObjects.AnnouncerDataObj)AnnouncerDataSerializer.JsonSerializer.ReadObject(AnnouncerMemoryStream);
                     AnnouncerMemoryStream.SetLength(0);
 
@@ -250,19 +251,28 @@ namespace TauMulticastReferenceCSharp
                         datapacket = new TauObjects.DataPacket();
                     }
 
-                    datapacket_temp.ParseUpdate(DataMemoryStream);
+                    if (mappingpacket != null)
+                    {
+                        lock (mappingpacket)
+                        {
+                            datapacket_temp.ParseUpdate(DataMemoryStream, mappingpacket);
+                        }
+                    }
+                    else {
+                        datapacket_temp.ParseUpdate(DataMemoryStream);
+                    }
+
                     DataMemoryStream.SetLength(0);
 
                     lock (datapacket) {
+                        datapacket.CopyFrom(datapacket_temp);
 
+                        if (MulticastDataConsoleWrite)
+                        {
+                            Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", datapacket_temp.ToString()));
+                            Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", datapacket.ToString()));
+                        }
                     }
-                    
-
-                    if (MulticastDataConsoleWrite)
-                    {
-                        Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", datapacket_temp.ToString()));
-                    }
-
                 }
 
                 Thread.Sleep(DataThreadSleep);
@@ -295,13 +305,19 @@ namespace TauMulticastReferenceCSharp
 
                     string receivedString = BitConverter.ToString(receivedBytes);
 
-                    mappingpacket = TauObjects.MappingPacket.Parse(receivedBytes);
-
-                    if (MulticastMappingConsoleWrite)
+                    if (mappingpacket == null)
                     {
-                        Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", mappingpacket.ToString()));
+                        mappingpacket = new TauObjects.MappingPacket();
                     }
 
+                    lock (mappingpacket) {
+                        mappingpacket.Parse(receivedBytes);
+
+                        if (MulticastMappingConsoleWrite)
+                        {
+                            Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", mappingpacket.ToString()));
+                        }
+                    }
                 }
 
                 Thread.Sleep(MappingThreadSleep);

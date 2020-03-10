@@ -103,7 +103,7 @@ namespace TauMulticastReferenceCSharp
                 modules = new List<Module>();
             }
 
-            public void ParseUpdate(MemoryStream packet_content_stream)
+            public void ParseUpdate(MemoryStream packet_content_stream, MappingPacket mapping_packet = null)
             {
                 BinaryReader br = new BinaryReader(packet_content_stream);
                 module_count = br.ReadByte();
@@ -160,6 +160,11 @@ namespace TauMulticastReferenceCSharp
                             cur_module.sensors.Add(cur_sensor);
                         }
 
+                        if (mapping_packet != null && mapping_packet.mapping.TryGetValue(cur_sensor.id, out string temp_map_str))
+                        {
+                            cur_sensor.mapping = temp_map_str;
+                        }
+
                         cur_sensor.active = (cur_module.sensors_active & (1 << s)) > 0;
                         cur_sensor.bad_coords = (cur_module.data_integrity & (1 << s)) > 0;
 
@@ -194,6 +199,103 @@ namespace TauMulticastReferenceCSharp
                 //br.Dispose();
             }
 
+            public void CopyFrom(DataPacket _packet)
+            {
+                module_count = _packet.module_count;
+
+                for (int i = 0; i < module_count; i++)
+                {
+                    Module cur_module = null;
+                    int cur_module_serial = _packet.modules[i].serial;
+
+                    foreach (Module module in modules)
+                    {
+                        if (module.serial == cur_module_serial)
+                        {
+                            cur_module = module;
+                            break;
+                        }
+                    }
+
+                    if (cur_module == null)
+                    {
+
+                        cur_module = new Module
+                        {
+                            serial = cur_module_serial
+                        };
+                        modules.Add(cur_module);
+                    }
+
+
+                    cur_module.sensors_active = _packet.modules[i].sensors_active;
+                    cur_module.data_integrity = _packet.modules[i].data_integrity;
+
+                    //foreach (var sensor in cur_module.sensors)
+                    //{
+                    //    sensor.active = false;
+                    //}
+
+                    for (int s = 0; s < 6; s++)
+                    {
+                        Sensor cur_sensor = null;
+                        int cur_sensor_id = _packet.modules[i].sensors[s].id;
+
+                        foreach (var sensor in cur_module.sensors)
+                        {
+                            if (sensor.id == cur_sensor_id)
+                            {
+                                cur_sensor = sensor;
+                                break;
+                            }
+                        }
+
+                        if (cur_sensor == null)
+                        {
+                            cur_sensor = new Sensor
+                            {
+                                id = cur_sensor_id
+                            };
+                            cur_module.sensors.Add(cur_sensor);
+                        }
+
+                        cur_sensor.mapping = _packet.modules[i].sensors[s].mapping;
+
+                        cur_sensor.active = _packet.modules[i].sensors[s].active;
+                        cur_sensor.bad_coords = _packet.modules[i].sensors[s].bad_coords;
+
+                        if (cur_sensor.active)
+                        {
+                            cur_sensor.q0 = _packet.modules[i].sensors[s].q0;
+                            cur_sensor.q1 = _packet.modules[i].sensors[s].q1;
+                            cur_sensor.q2 = _packet.modules[i].sensors[s].q2;
+                            cur_sensor.q3 = _packet.modules[i].sensors[s].q3;
+                            cur_sensor.x = _packet.modules[i].sensors[s].x;
+                            cur_sensor.y = _packet.modules[i].sensors[s].y;
+                            cur_sensor.z = _packet.modules[i].sensors[s].z;
+
+                            int bonelength = _packet.modules[i].sensors[s].bones.Count;
+                            if (bonelength > 0)
+                            {
+                                while (bonelength > cur_sensor.bones.Count)
+                                {
+                                    cur_sensor.bones.Add(new IKBone());
+                                }
+
+                                for (int bl = 0; bl < bonelength; bl++)
+                                {
+                                    var cur_bone = cur_sensor.bones[bl];
+                                    cur_bone.x = _packet.modules[i].sensors[s].bones[bl].x;
+                                    cur_bone.y = _packet.modules[i].sensors[s].bones[bl].y;
+                                    cur_bone.z = _packet.modules[i].sensors[s].bones[bl].z;
+                                }
+                            }
+                        }
+                    }
+                }
+                //br.Dispose();
+            }
+
             public override string ToString() {
                 string readable_data = "";
                 readable_data += String.Format("number of modules: {0}\n", module_count);
@@ -219,14 +321,14 @@ namespace TauMulticastReferenceCSharp
 
         public class MappingPacket
         {
-            public static Dictionary<int, string> mapping;
+            public Dictionary<int, string> mapping;
 
             public MappingPacket()
             {
                 mapping = new Dictionary<int, string>();
             }
 
-            public static MappingPacket Parse(byte[] received_bytes) {
+            public void Parse(byte[] received_bytes) {
 
                 var packet = new MappingPacket();
                 string converted = Encoding.UTF8.GetString(received_bytes, 0, received_bytes.Length);
@@ -255,8 +357,6 @@ namespace TauMulticastReferenceCSharp
 
                     } while (line != null);
                 }
-
-                return packet;
             }
 
             public override string ToString()
