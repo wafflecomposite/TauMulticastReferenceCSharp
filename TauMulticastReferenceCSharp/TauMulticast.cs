@@ -23,13 +23,15 @@ namespace TauMulticastReferenceCSharp
             MappingMemoryStream,
             DebugMemoryStream;
 
-        private BinaryReader DataMemoryStreamReader;
+        private BinaryReader DataMemoryStreamReader, DebugMemoryStreamReader;
 
         private TauObjects.AnnouncerDataSerializer AnnouncerDataSerializer = new TauObjects.AnnouncerDataSerializer();
         public TauObjects.AnnouncerDataObj AnnouncerData = new TauObjects.AnnouncerDataObj();
 
         public TauObjects.DataPacket datapacket = new TauObjects.DataPacket();
         public TauObjects.DataPacket datapacket_temp = new TauObjects.DataPacket();
+        public TauObjects.DebugPacket debugpacket = new TauObjects.DebugPacket();
+        public TauObjects.DebugPacket debugpacket_temp = new TauObjects.DebugPacket();
         public TauObjects.MappingPacket mappingpacket = new TauObjects.MappingPacket();
 
         private UdpClient MulticastAnnouncerClient,
@@ -82,6 +84,12 @@ namespace TauMulticastReferenceCSharp
             if (EnableLogsThread) {
                 MulticastLogsThread = new Thread(() => MulticastLogsTask()) { IsBackground = true };
                 MulticastLogsThread.Start();
+            }
+
+            if (EnableDebugThread)
+            {
+                MulticastDebugThread = new Thread(() => MulticastDebugTask()) { IsBackground = true };
+                MulticastDebugThread.Start();
             }
         }
 
@@ -248,7 +256,7 @@ namespace TauMulticastReferenceCSharp
             DataMemoryStream = new MemoryStream();
             DataMemoryStreamReader = new BinaryReader(DataMemoryStream);
 
-            byte[] receivedBytes = new byte[1400];
+            byte[] receivedBytes = new byte[1432];
 
 
             while (GeneralConnectionStatus == 1)
@@ -370,6 +378,55 @@ namespace TauMulticastReferenceCSharp
                 }
 
                 Thread.Sleep(LogsThreadSleep);
+            }
+        }
+
+        private void MulticastDebugTask()
+        {
+            MulticastDebugClient = new UdpClient();
+
+            while (AnnouncerData == null || AnnouncerData.Initialized == false)
+            {
+                Thread.Sleep(AnnouncerThreadSleep);
+            }
+
+            string[] splitted_group = AnnouncerData.MulticastDebugGroup.Split(':');
+
+            IPAddress MulticastDebugGroupAddress = IPAddress.Parse(splitted_group[0]);
+            int MulticastDebugPort = int.Parse(splitted_group[1]);
+
+            IPEndPoint localEp = ClientJoinMulticast(MulticastDebugClient, MulticastDebugGroupAddress, MulticastDebugPort);
+
+            DebugMemoryStream = new MemoryStream();
+            DebugMemoryStreamReader = new BinaryReader(DebugMemoryStream);
+
+            byte[] receivedBytes = new byte[1432];
+
+            while (GeneralConnectionStatus == 1)
+            {
+                if (MulticastDebugClient.Available > 0)
+                {
+                    receivedBytes = MulticastDebugClient.Receive(ref localEp);
+
+                    DebugMemoryStream.Write(receivedBytes, 0, receivedBytes.Length);
+                    DebugMemoryStream.Position = 0;
+
+                    debugpacket_temp.ParseUpdate(DebugMemoryStreamReader);
+
+                    DebugMemoryStream.SetLength(0);
+
+                    lock (debugpacket)
+                    {
+                        debugpacket.CopyFrom(debugpacket_temp);
+
+                        if (MulticastDebugConsoleWrite)
+                        {
+                            Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", debugpacket.ToString()));
+                        }
+                    }
+                }
+
+                Thread.Sleep(DebugThreadSleep);
             }
         }
     }

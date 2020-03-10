@@ -201,7 +201,7 @@ namespace TauMulticastReferenceCSharp
                     }
                 }
                 initialized = true;
-        }
+            }
 
             public void CopyFrom(DataPacket _packet)
             {
@@ -317,6 +317,239 @@ namespace TauMulticastReferenceCSharp
                         {
                             readable_data += String.Format("    bone: pos({0:+000.00;-000.00} {1:+000.00;-000.00} {2:+000.00;-000.00})\n", b.x, b.y, b.z);
                         }
+                    }
+                }
+                return readable_data;
+            }
+        }
+
+        public class DebugSensor
+        {
+            public int id;
+            public bool active;
+            public float acc_x;
+            public float acc_y;
+            public float acc_z;
+            public float gyro_x;
+            public float gyro_y;
+            public float gyro_z;
+            public float mag_x;
+            public float mag_y;
+            public float mag_z;
+            public float mag_terra_x;
+            public float mag_terra_y;
+            public float mag_terra_z;
+            public float mag_coil_x;
+            public float mag_coil_y;
+            public float mag_coil_z;
+        }
+
+        public class DebugModule
+        {
+            public int serial;
+            public byte sensors_active;
+            public List<DebugSensor> sensors;
+
+            public DebugModule()
+            {
+                sensors = new List<DebugSensor>();
+            }
+        }
+
+        public class DebugPacket
+        {
+            public int module_count;
+            public List<DebugModule> modules;
+            public bool initialized;
+
+            public DebugPacket()
+            {
+                module_count = 0;
+                modules = new List<DebugModule>();
+            }
+
+            public void ParseUpdate(BinaryReader br)
+            {
+                module_count = br.ReadByte();
+
+                for (int i = 0; i < module_count; i++)
+                {
+                    DebugModule cur_module = null;
+                    int cur_module_serial = br.ReadUInt16();
+                    
+
+                    foreach (DebugModule module in modules)
+                    {
+                        if (module.serial == cur_module_serial)
+                        {
+                            cur_module = module;
+                            break;
+                        }
+                    }
+
+                    if (cur_module == null)
+                    {
+
+                        cur_module = new DebugModule
+                        {
+                            serial = cur_module_serial
+                        };
+                        modules.Add(cur_module);
+                    }
+
+                    cur_module.sensors_active = br.ReadByte();
+
+                    foreach (var sensor in cur_module.sensors)
+                    {
+                        sensor.active = false;
+                    }
+
+                    for (int s = 0; s < 6; s++)
+                    {
+                        DebugSensor cur_sensor = null;
+                        int cur_sensor_id = cur_module.serial * 16 + s;
+
+                        foreach (var sensor in cur_module.sensors)
+                        {
+                            if (sensor.id == cur_sensor_id)
+                            {
+                                cur_sensor = sensor;
+                                break;
+                            }
+                        }
+
+                        if (cur_sensor == null)
+                        {
+                            cur_sensor = new DebugSensor
+                            {
+                                id = cur_sensor_id
+                            };
+                            cur_module.sensors.Add(cur_sensor);
+                        }
+
+                        cur_sensor.active = (cur_module.sensors_active & (1 << s)) > 0;
+
+                        if (cur_sensor.active)
+                        {
+                            cur_sensor.acc_x = br.ReadSingle();
+                            cur_sensor.acc_y = br.ReadSingle();
+                            cur_sensor.acc_z = br.ReadSingle();
+                            cur_sensor.gyro_x = br.ReadSingle();
+                            cur_sensor.gyro_y = br.ReadSingle();
+                            cur_sensor.gyro_z = br.ReadSingle();
+                            cur_sensor.mag_x = br.ReadSingle();
+                            cur_sensor.mag_y = br.ReadSingle();
+                            cur_sensor.mag_z = br.ReadSingle();
+                            cur_sensor.mag_terra_x = br.ReadSingle();
+                            cur_sensor.mag_terra_y = br.ReadSingle();
+                            cur_sensor.mag_terra_z = br.ReadSingle();
+                            cur_sensor.mag_coil_x = br.ReadSingle();
+                            cur_sensor.mag_coil_y = br.ReadSingle();
+                            cur_sensor.mag_coil_z = br.ReadSingle();
+                        }
+                    }
+                }
+                initialized = true;
+            }
+
+            public void CopyFrom(DebugPacket _packet)
+            {
+                module_count = _packet.module_count;
+
+                for (int i = 0; i < module_count; i++)
+                {
+                    DebugModule cur_module = null;
+                    int cur_module_serial = _packet.modules[i].serial;
+
+                    foreach (DebugModule module in modules)
+                    {
+                        if (module.serial == cur_module_serial)
+                        {
+                            cur_module = module;
+                            break;
+                        }
+                    }
+
+                    if (cur_module == null)
+                    {
+
+                        cur_module = new DebugModule
+                        {
+                            serial = cur_module_serial
+                        };
+                        modules.Add(cur_module);
+                    }
+
+                    cur_module.sensors_active = _packet.modules[i].sensors_active;
+
+                    for (int s = 0; s < 6; s++)
+                    {
+                        DebugSensor cur_sensor = null;
+                        int cur_sensor_id = _packet.modules[i].sensors[s].id;
+
+                        foreach (var sensor in cur_module.sensors)
+                        {
+                            if (sensor.id == cur_sensor_id)
+                            {
+                                cur_sensor = sensor;
+                                break;
+                            }
+                        }
+
+                        if (cur_sensor == null)
+                        {
+                            cur_sensor = new DebugSensor
+                            {
+                                id = cur_sensor_id
+                            };
+                            cur_module.sensors.Add(cur_sensor);
+                        }
+
+                        cur_sensor.active = _packet.modules[i].sensors[s].active;
+
+                        if (cur_sensor.active)
+                        {
+                            cur_sensor.acc_x = _packet.modules[i].sensors[s].acc_x;
+                            cur_sensor.acc_y = _packet.modules[i].sensors[s].acc_y;
+                            cur_sensor.acc_z = _packet.modules[i].sensors[s].acc_z;
+                            cur_sensor.gyro_x = _packet.modules[i].sensors[s].gyro_x;
+                            cur_sensor.gyro_y = _packet.modules[i].sensors[s].gyro_y;
+                            cur_sensor.gyro_z = _packet.modules[i].sensors[s].gyro_z;
+                            cur_sensor.mag_x = _packet.modules[i].sensors[s].mag_x;
+                            cur_sensor.mag_y = _packet.modules[i].sensors[s].mag_y;
+                            cur_sensor.mag_z = _packet.modules[i].sensors[s].mag_z;
+                            cur_sensor.mag_terra_x = _packet.modules[i].sensors[s].mag_terra_x;
+                            cur_sensor.mag_terra_y = _packet.modules[i].sensors[s].mag_terra_y;
+                            cur_sensor.mag_terra_z = _packet.modules[i].sensors[s].mag_terra_z;
+                            cur_sensor.mag_coil_x = _packet.modules[i].sensors[s].mag_coil_x;
+                            cur_sensor.mag_coil_y = _packet.modules[i].sensors[s].mag_coil_y;
+                            cur_sensor.mag_coil_z = _packet.modules[i].sensors[s].mag_coil_z;
+                        }
+                    }
+                }
+                initialized = true;
+            }
+
+            public override string ToString()
+            {
+                string readable_data = "";
+                readable_data += String.Format("number of modules: {0}\n", module_count);
+                foreach (var m in modules)
+                {
+                    readable_data += String.Format("module {0}:\n", m.serial.ToString("x"));
+                    foreach (var s in m.sensors)
+                    {
+                        if (s.active == false)
+                        {
+                            continue;
+                        }
+                        readable_data += String.Format("  sensor {0}: \n", s.id.ToString("x"));
+                        readable_data += String.Format("    active: {0}\n    acc({1:+000.00;-000.00} {2:+000.00;-000.00} {3:+000.00;-000.00})\n" +
+                            "    gyro({4:+000.00;-000.00} {5:+000.00;-000.00} {6:+000.00;-000.00})\n" +
+                            "    mag({7:+000.00;-000.00} {8:+000.00;-000.00} {9:+000.00;-000.00})\n" +
+                            "    mag_terra({10:+000.00;-000.00} {11:+000.00;-000.00} {12:+000.00;-000.00})\n" +
+                            "    mag_coil({13:+000.00;-000.00} {14:+000.00;-000.00} {15:+000.00;-000.00})\n", s.active, s.acc_x, s.acc_y, s.acc_z, s.mag_x, s.mag_y, s.mag_z,
+                            s.gyro_x, s.gyro_y, s.gyro_z, s.mag_terra_x, s.mag_terra_y, s.mag_terra_z, s.mag_coil_x, s.mag_coil_y, s.mag_coil_z);
                     }
                 }
                 return readable_data;
