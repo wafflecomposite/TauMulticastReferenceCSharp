@@ -120,48 +120,6 @@ namespace TauMulticastReferenceCSharp
             }
         }
 
-        private static byte[] ByteReplace(byte[] input, byte[] pattern, byte[] replacement)  //TODO: ЭТО КОСТЫЛЬ! УБРАТЬ ПОСЛЕ ФИКСА API!!!!
-        {
-            if (pattern.Length == 0)
-            {
-                return input;
-            }
-
-            List<byte> result = new List<byte>();
-
-            int i;
-
-            for (i = 0; i <= input.Length - pattern.Length; i++)
-            {
-                bool foundMatch = true;
-                for (int j = 0; j < pattern.Length; j++)
-                {
-                    if (input[i + j] != pattern[j])
-                    {
-                        foundMatch = false;
-                        break;
-                    }
-                }
-
-                if (foundMatch)
-                {
-                    result.AddRange(replacement);
-                    i += pattern.Length - 1;
-                }
-                else
-                {
-                    result.Add(input[i]);
-                }
-            }
-
-            for (; i < input.Length; i++)
-            {
-                result.Add(input[i]);
-            }
-
-            return result.ToArray();
-        }
-
         private IPEndPoint ClientJoinMulticast(UdpClient client, IPAddress GroupAddress, int GroupPort) {
             IPEndPoint localEp = new IPEndPoint(IPAddress.Any, GroupPort);
             client.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
@@ -214,8 +172,6 @@ namespace TauMulticastReferenceCSharp
                 if (MulticastAnnouncerClient.Available > 0)
                 {
                     byte[] receivedBytes = MulticastAnnouncerClient.Receive(ref localEp);
-
-                    receivedBytes = ByteReplace(receivedBytes, Encoding.ASCII.GetBytes("\n"), new byte[] {}); //TODO: ЭТО КОСТЫЛЬ! УБРАТЬ ПОСЛЕ ФИКСА API!!!!
 
                     AnnouncerMemoryStream.Write(receivedBytes, 0, receivedBytes.Length);
                     AnnouncerMemoryStream.Position = 0;
