@@ -12,8 +12,7 @@ namespace TauMulticastReferenceCSharp
 
     class TauMulticast
     {
-
-        public int GeneralConnectionStatus = 1; //0 - not connected, 1 - connected, 2 - disconnect request pending
+        public int ConnectionStatus { get; private set; } = 0; //0 - not connected, 1 - connected, 2 - disconnect pending
 
         public static IPAddress MulticastAnnouncerGroupAddress = IPAddress.Parse("239.255.255.151");
         public static int MulticastAnnouncerPort = 16061;
@@ -26,13 +25,13 @@ namespace TauMulticastReferenceCSharp
         private BinaryReader DataMemoryStreamReader, DebugMemoryStreamReader;
 
         private TauObjects.AnnouncerDataSerializer AnnouncerDataSerializer = new TauObjects.AnnouncerDataSerializer();
-        public TauObjects.AnnouncerDataObj AnnouncerData = new TauObjects.AnnouncerDataObj();
+        private TauObjects.AnnouncerDataObj AnnouncerData = new TauObjects.AnnouncerDataObj();
 
-        public TauObjects.DataPacket datapacket = new TauObjects.DataPacket();
-        public TauObjects.DataPacket datapacket_temp = new TauObjects.DataPacket();
-        public TauObjects.DebugPacket debugpacket = new TauObjects.DebugPacket();
-        public TauObjects.DebugPacket debugpacket_temp = new TauObjects.DebugPacket();
-        public TauObjects.MappingPacket mappingpacket = new TauObjects.MappingPacket();
+        private TauObjects.DataPacket datapacket = new TauObjects.DataPacket();
+        private TauObjects.DataPacket datapacket_temp = new TauObjects.DataPacket();
+        private TauObjects.DebugPacket debugpacket = new TauObjects.DebugPacket();
+        private TauObjects.DebugPacket debugpacket_temp = new TauObjects.DebugPacket();
+        private TauObjects.MappingPacket mappingpacket = new TauObjects.MappingPacket();
 
         private UdpClient MulticastAnnouncerClient,
             MulticastDataClient,
@@ -46,16 +45,10 @@ namespace TauMulticastReferenceCSharp
             MulticastLogsThread,
             MulticastDebugThread;
 
-        public bool MulticastAnnouncerConsoleWrite,
-            MulticastDataConsoleWrite,
-            MulticastMappingConsoleWrite,
-            MulticastLogsConsoleWrite,
-            MulticastDebugConsoleWrite;
-
         public int AnnouncerThreadSleep = 100;
         public int DataThreadSleep = 5;
         public int MappingThreadSleep = 100;
-        public int LogsThreadSleep = 10;
+        public int LogsThreadSleep = 1000;
         public int DebugThreadSleep = 5;
 
         private bool EnableLogsThread = false;
@@ -72,24 +65,83 @@ namespace TauMulticastReferenceCSharp
             EnableDebugThread = debug;
         }
 
-        public void Connect()
+        public int Connect()
         {
-            MulticastAnnouncerThread = new Thread(() => MulticastAnnouncerTask()) { IsBackground = true };
-            MulticastAnnouncerThread.Start();
-            MulticastDataThread = new Thread(() => MulticastDataTask()) { IsBackground = true };
-            MulticastDataThread.Start();
-            MulticastMappingThread = new Thread(() => MulticastMappingTask()) { IsBackground = true };
-            MulticastMappingThread.Start();
-
-            if (EnableLogsThread) {
-                MulticastLogsThread = new Thread(() => MulticastLogsTask()) { IsBackground = true };
-                MulticastLogsThread.Start();
-            }
-
-            if (EnableDebugThread)
+            if (ConnectionStatus == 0)
             {
-                MulticastDebugThread = new Thread(() => MulticastDebugTask()) { IsBackground = true };
-                MulticastDebugThread.Start();
+                ConnectionStatus = 1;
+                MulticastAnnouncerThread = new Thread(() => MulticastAnnouncerTask()) { IsBackground = true };
+                MulticastAnnouncerThread.Start();
+                MulticastDataThread = new Thread(() => MulticastDataTask()) { IsBackground = true };
+                MulticastDataThread.Start();
+                MulticastMappingThread = new Thread(() => MulticastMappingTask()) { IsBackground = true };
+                MulticastMappingThread.Start();
+
+                if (EnableLogsThread)
+                {
+                    MulticastLogsThread = new Thread(() => MulticastLogsTask()) { IsBackground = true };
+                    MulticastLogsThread.Start();
+                }
+
+                if (EnableDebugThread)
+                {
+                    MulticastDebugThread = new Thread(() => MulticastDebugTask()) { IsBackground = true };
+                    MulticastDebugThread.Start();
+                }
+
+                return 0; //success
+            }
+            else if (ConnectionStatus == 1)
+            {
+                return 1; //can't connect, already connected state
+            }
+            else if (ConnectionStatus == 2)
+            {
+                return 2; //can't connect, disconnect pending
+            }
+            else
+            {
+                throw new Exception("TauMulticast.Connect: ConnectionStatus unexpected value");
+            }
+        }
+
+        public int Disconnect()
+        {
+            if (ConnectionStatus == 1) {
+                ConnectionStatus = 2;
+                while (MulticastAnnouncerThread.IsAlive && MulticastDataThread.IsAlive && MulticastMappingThread.IsAlive) {
+                    Thread.Sleep(5);
+                }
+
+                if (EnableLogsThread)
+                {
+                    while (MulticastLogsThread.IsAlive)
+                    {
+                        Thread.Sleep(5);
+                    }
+                }
+
+                if (EnableDebugThread)
+                {
+                    while (MulticastDebugThread.IsAlive)
+                    {
+                        Thread.Sleep(5);
+                    }
+                }
+                ConnectionStatus = 0;
+                return 0;
+            }
+            else if (ConnectionStatus == 0)
+            {
+                return 1; //can't disconnect, not connected state
+            }
+            else if (ConnectionStatus == 2)
+            {
+                return 2; //can't disconnect, disconnect pending
+            }
+            else
+            {
+                throw new Exception("TauMulticast.Disconnect: ConnectionStatus unexpected value");
             }
         }
 
@@ -140,7 +192,7 @@ namespace TauMulticastReferenceCSharp
                     try
                     {
                         client.JoinMulticastGroup(GroupAddress, NICaddress);
-                        Console.WriteLine("Successful connection: " + GroupAddress.ToString() + ":" + GroupPort.ToString() + " on " + NICaddress.ToString());
+                        Console.WriteLine("[TAU]Successful MulticastGroup connection: " + GroupAddress.ToString() + ":" + GroupPort.ToString() + " on " + NICaddress.ToString());
                     }
                     catch (System.Net.Sockets.SocketException e)
                     {
@@ -168,7 +220,7 @@ namespace TauMulticastReferenceCSharp
 
             AnnouncerMemoryStream = new MemoryStream();
 
-            while (GeneralConnectionStatus == 1) { 
+            while (ConnectionStatus == 1) { 
                 if (MulticastAnnouncerClient.Available > 0)
                 {
                     byte[] receivedBytes = MulticastAnnouncerClient.Receive(ref localEp);
@@ -181,11 +233,6 @@ namespace TauMulticastReferenceCSharp
                         AnnouncerData = (TauObjects.AnnouncerDataObj)AnnouncerDataSerializer.JsonSerializer.ReadObject(AnnouncerMemoryStream);
                         AnnouncerData.HubIP = localEp.Address.ToString();
                         AnnouncerData.Initialized = true;
-
-                        if (MulticastAnnouncerConsoleWrite)
-                        {
-                            Console.WriteLine(String.Format("= = = = = = = = = =\nIP: {0}\n{1}", localEp.Address.ToString(), AnnouncerData.ToString()));
-                        }
                     }
                     AnnouncerMemoryStream.SetLength(0);
                 }
@@ -215,12 +262,11 @@ namespace TauMulticastReferenceCSharp
             byte[] receivedBytes = new byte[1432];
 
 
-            while (GeneralConnectionStatus == 1)
+            while (ConnectionStatus == 1)
             {
                 if (MulticastDataClient.Available > 0)
                 {
                     receivedBytes = MulticastDataClient.Receive(ref localEp);
-                    //int resp_length = MulticastDataClient.Client.ReceiveFrom(receivedBytes, ref localEp);
 
                     DataMemoryStream.Write(receivedBytes, 0, receivedBytes.Length);
                     DataMemoryStream.Position = 0;
@@ -240,12 +286,6 @@ namespace TauMulticastReferenceCSharp
 
                     lock (datapacket) {
                         datapacket.CopyFrom(datapacket_temp);
-
-                        if (MulticastDataConsoleWrite)
-                        {
-                            //Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", datapacket_temp.ToString()));
-                            Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", datapacket.ToString()));
-                        }
                     }
                 }
 
@@ -271,7 +311,7 @@ namespace TauMulticastReferenceCSharp
 
             MappingMemoryStream = new MemoryStream();
 
-            while (GeneralConnectionStatus == 1)
+            while (ConnectionStatus == 1)
             {
                 if (MulticastMappingClient.Available > 0)
                 {
@@ -279,11 +319,6 @@ namespace TauMulticastReferenceCSharp
 
                     lock (mappingpacket) {
                         mappingpacket.Parse(receivedBytes);
-
-                        if (MulticastMappingConsoleWrite)
-                        {
-                            Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", mappingpacket.ToString()));
-                        }
                     }
                 }
 
@@ -307,7 +342,7 @@ namespace TauMulticastReferenceCSharp
 
             IPEndPoint localEp = ClientJoinMulticast(MulticastLogsClient, MulticastLogsGroupAddress, MulticastLogsPort);
 
-            while (GeneralConnectionStatus == 1)
+            while (ConnectionStatus == 1)
             {
                 if (MulticastLogsClient.Available > 0)
                 {
@@ -320,14 +355,6 @@ namespace TauMulticastReferenceCSharp
                         Logs.Add(receivedString);
                         if (Logs.Count > LogsMaxLen) {
                             Logs.RemoveAt(0);
-                        }
-
-                        if (MulticastLogsConsoleWrite)
-                        {
-                            foreach (var logstr in Logs) {
-                                Console.WriteLine(receivedString);
-                            }
-                            Logs.Clear();
                         }
                     }
 
@@ -358,7 +385,7 @@ namespace TauMulticastReferenceCSharp
 
             byte[] receivedBytes = new byte[1432];
 
-            while (GeneralConnectionStatus == 1)
+            while (ConnectionStatus == 1)
             {
                 if (MulticastDebugClient.Available > 0)
                 {
@@ -374,16 +401,65 @@ namespace TauMulticastReferenceCSharp
                     lock (debugpacket)
                     {
                         debugpacket.CopyFrom(debugpacket_temp);
-
-                        if (MulticastDebugConsoleWrite)
-                        {
-                            Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", debugpacket.ToString()));
-                        }
                     }
                 }
 
                 Thread.Sleep(DebugThreadSleep);
             }
+        }
+
+        public TauObjects.AnnouncerDataObj GetAnnouncerPacket() {
+            if (AnnouncerData != null && AnnouncerData.Initialized)
+            {
+                lock (AnnouncerData) { return AnnouncerData; }
+            }
+            else {
+                return null;
+            }
+        }
+
+        public TauObjects.DataPacket GetDataPacket()
+        {
+            if (datapacket != null && datapacket.initialized)
+            {
+                lock (datapacket) { return datapacket; }
+            }
+            else {
+                return null;
+            }
+            
+        }
+
+        public TauObjects.MappingPacket GetMappingPacket()
+        {
+            if (mappingpacket != null && mappingpacket.initialized)
+            {
+                lock (mappingpacket) { return mappingpacket; }
+            }
+            else {
+                return null;
+            }
+            
+        }
+
+        public List<string> GetLogs() {
+            lock (Logs) { 
+                List<string> logscopy = new List<string>(Logs);
+                Logs.Clear();
+                return logscopy;
+            }
+        }
+
+        public TauObjects.DebugPacket GetDebugPacket()
+        {
+            if (debugpacket != null && debugpacket.initialized)
+            {
+                lock (debugpacket) { return debugpacket; }
+            }
+            else {
+                return null;
+            }
+            
         }
     }
 }

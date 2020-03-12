@@ -43,9 +43,9 @@ namespace TauMulticastReferenceCSharp
 
             public override string ToString()
             {
-                return String.Format("AvailableRevision: {0}\nCurrentRevision: {1}\nCommandServerVersion: {2}\n" +
+                return String.Format("IP: {8}\nAvailableRevision: {0}\nCurrentRevision: {1}\nCommandServerVersion: {2}\n" +
                     "MulticastDataGroup: {3}\nMulticastDebugGroup: {4}\nMulticastMappingGroup: {5}\nMulticastLogsGroup: {6}\nThetaVersion: {7}",
-                    AvailableRevision, CurrentRevision, CommandServerVersion, MulticastDataGroup, MulticastDebugGroup, MulticastMappingGroup, MulticastLogsGroup, ThetaVersion);
+                    AvailableRevision, CurrentRevision, CommandServerVersion, MulticastDataGroup, MulticastDebugGroup, MulticastMappingGroup, MulticastLogsGroup, ThetaVersion, HubIP);
             }
         }
 
