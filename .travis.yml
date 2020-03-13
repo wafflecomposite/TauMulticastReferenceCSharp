@@ -7,4 +7,6 @@ jobs:
       mono: none
       env: DOTNETCORE=2  # optional, can be used to take different code paths in your script
       script:
-        - dotnet build
+        - dotnet restore
+        - dotnet build TauMulticastReferenceCSharpCore.sln
+    - mono: latest
