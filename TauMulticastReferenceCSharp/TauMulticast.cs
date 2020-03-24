@@ -48,7 +48,7 @@ namespace TauMulticastReferenceCSharp
         public int AnnouncerThreadSleep = 100;
         public int DataThreadSleep = 5;
         public int MappingThreadSleep = 100;
-        public int LogsThreadSleep = 1000;
+        public int LogsThreadSleep = 50;
         public int DebugThreadSleep = 5;
 
         private bool EnableLogsThread = false;

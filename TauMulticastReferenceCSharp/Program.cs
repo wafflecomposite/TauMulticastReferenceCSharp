@@ -103,10 +103,11 @@ namespace TauMulticastReferenceCSharp
                     if (LogsRead)
                     {
                         List<string> logs = tau_multicast.GetLogs();
-                        Console.WriteLine("= = = = = = = = = =\nLOGS:\n");
-                        foreach (var logstr in logs)
-                        {
-                            Console.WriteLine(logstr);
+                        if (logs.Count > 0) { 
+                            foreach (var logstr in logs)
+                            {
+                                Console.WriteLine(logstr);
+                            }
                         }
                     }
                     Thread.Sleep(tau_multicast.LogsThreadSleep);
