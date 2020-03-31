@@ -101,6 +101,8 @@ namespace TauMulticastReferenceCSharp
             public List<Module> modules;
             public bool initialized;
 
+            private string temp_map_str;
+
             public DataPacket()
             {
                 module_count = 0;
@@ -164,10 +166,12 @@ namespace TauMulticastReferenceCSharp
                             cur_module.sensors.Add(cur_sensor);
                         }
 
-                        if (mapping_packet != null && mapping_packet.mapping.TryGetValue(cur_sensor.id, out string temp_map_str))
+                        if (mapping_packet != null && mapping_packet.mapping.TryGetValue(cur_sensor.id, out temp_map_str))
                         {
                             cur_sensor.mapping = temp_map_str;
+                            temp_map_str = "";
                         }
+
 
                         cur_sensor.active = (cur_module.sensors_active & (1 << s)) > 0;
                         cur_sensor.bad_coords = (cur_module.data_integrity & (1 << s)) > 0;
