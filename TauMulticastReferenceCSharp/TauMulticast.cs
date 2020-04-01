@@ -10,7 +10,7 @@ using System.IO;
 namespace TauMulticastReferenceCSharp
 {
 
-    class TauMulticast
+    public class TauMulticast
     {
         public int ConnectionStatus { get; private set; } = 0; //0 - not connected, 1 - connected, 2 - disconnect pending
 
@@ -32,6 +32,12 @@ namespace TauMulticastReferenceCSharp
         private TauObjects.DebugPacket debugpacket = new TauObjects.DebugPacket();
         private TauObjects.DebugPacket debugpacket_temp = new TauObjects.DebugPacket();
         private TauObjects.MappingPacket mappingpacket = new TauObjects.MappingPacket();
+
+        public object AnnouncerLocker = new object(),
+            DataLocker = new object(),
+            MappingLocker = new object(),
+            LogsLocker = new object(),
+            DebugLocker = new object();
 
         private UdpClient MulticastAnnouncerClient,
             MulticastDataClient,
@@ -228,7 +234,7 @@ namespace TauMulticastReferenceCSharp
                     AnnouncerMemoryStream.Write(receivedBytes, 0, receivedBytes.Length);
                     AnnouncerMemoryStream.Position = 0;
 
-                    lock (AnnouncerData) {
+                    lock (AnnouncerLocker) {
                         
                         AnnouncerData = (TauObjects.AnnouncerDataObj)AnnouncerDataSerializer.JsonSerializer.ReadObject(AnnouncerMemoryStream);
                         AnnouncerData.HubIP = localEp.Address.ToString();
@@ -273,7 +279,7 @@ namespace TauMulticastReferenceCSharp
 
                     if (mappingpacket != null && mappingpacket.initialized)
                     {
-                        lock (mappingpacket)
+                        lock (MappingLocker)
                         {
                             datapacket_temp.ParseUpdate(DataMemoryStreamReader, mappingpacket);
                         }
@@ -284,7 +290,7 @@ namespace TauMulticastReferenceCSharp
 
                     DataMemoryStream.SetLength(0);
 
-                    lock (datapacket) {
+                    lock (DataLocker) {
                         datapacket.CopyFrom(datapacket_temp);
                     }
                 }
@@ -317,7 +323,7 @@ namespace TauMulticastReferenceCSharp
                 {
                     byte[] receivedBytes = MulticastMappingClient.Receive(ref localEp);
 
-                    lock (mappingpacket) {
+                    lock (MappingLocker) {
                         mappingpacket.Parse(receivedBytes);
                     }
                 }
@@ -350,7 +356,7 @@ namespace TauMulticastReferenceCSharp
 
                     string receivedString = Encoding.UTF8.GetString(receivedBytes, 0, receivedBytes.Length);
 
-                    lock (Logs) {
+                    lock (LogsLocker) {
 
                         Logs.Add(receivedString);
                         if (Logs.Count > LogsMaxLen) {
@@ -398,7 +404,7 @@ namespace TauMulticastReferenceCSharp
 
                     DebugMemoryStream.SetLength(0);
 
-                    lock (debugpacket)
+                    lock (DebugLocker)
                     {
                         debugpacket.CopyFrom(debugpacket_temp);
                     }
@@ -411,7 +417,7 @@ namespace TauMulticastReferenceCSharp
         public TauObjects.AnnouncerDataObj GetAnnouncerPacket() {
             if (AnnouncerData != null && AnnouncerData.Initialized)
             {
-                lock (AnnouncerData) { return AnnouncerData; }
+                return AnnouncerData;
             }
             else {
                 return null;
@@ -422,7 +428,7 @@ namespace TauMulticastReferenceCSharp
         {
             if (datapacket != null && datapacket.initialized)
             {
-                lock (datapacket) { return datapacket; }
+                return datapacket;
             }
             else {
                 return null;
@@ -434,7 +440,7 @@ namespace TauMulticastReferenceCSharp
         {
             if (mappingpacket != null && mappingpacket.initialized)
             {
-                lock (mappingpacket) { return mappingpacket; }
+                return mappingpacket;
             }
             else {
                 return null;
@@ -443,7 +449,7 @@ namespace TauMulticastReferenceCSharp
         }
 
         public List<string> GetLogs() {
-            lock (Logs) { 
+            lock (LogsLocker) { 
                 List<string> logscopy = new List<string>(Logs);
                 Logs.Clear();
                 return logscopy;
@@ -454,7 +460,7 @@ namespace TauMulticastReferenceCSharp
         {
             if (debugpacket != null && debugpacket.initialized)
             {
-                lock (debugpacket) { return debugpacket; }
+                return debugpacket;
             }
             else {
                 return null;

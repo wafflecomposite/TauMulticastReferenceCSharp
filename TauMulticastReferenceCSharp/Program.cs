@@ -37,15 +37,17 @@ namespace TauMulticastReferenceCSharp
                 {
                     if (DataRead) //if reading flag is on
                     {
-                        TauObjects.DataPacket datapacket = tau_multicast.GetDataPacket(); //get packet
-                        if (datapacket != null) //check if it's null before trying to get data from it - this could well be the case if there was connection problems
-                        {
-                            // just print the data for now, refer to the TauObjects.DataPacket class to actually use sensor data
-                            Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", datapacket.ToString()));
-                        }
-                        else
-                        {
-                            Console.WriteLine("= = = [datapacket is null] = = =\n");
+                        lock (tau_multicast.DataLocker) { 
+                            TauObjects.DataPacket datapacket = tau_multicast.GetDataPacket(); //get packet
+                            if (datapacket != null) //check if it's null before trying to get data from it - this could well be the case if there was connection problems
+                            {
+                                // just print the data for now, refer to the TauObjects.DataPacket class to actually use sensor data
+                                Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", datapacket.ToString()));
+                            }
+                            else
+                            {
+                                Console.WriteLine("= = = [datapacket is null] = = =\n");
+                            }
                         }
                     }
                     // doesn't have to be DataThreadSleep, it's just lowest value that still makes sense. 
@@ -59,15 +61,16 @@ namespace TauMulticastReferenceCSharp
             {
                 while (true) { 
                     if (AnnouncerRead) {
-                        TauObjects.AnnouncerDataObj announcerpacket = tau_multicast.GetAnnouncerPacket();
-                        if (announcerpacket != null) {
-                            Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", announcerpacket.ToString()));
+                        lock (tau_multicast.AnnouncerLocker) { 
+                            TauObjects.AnnouncerDataObj announcerpacket = tau_multicast.GetAnnouncerPacket();
+                            if (announcerpacket != null) {
+                                Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", announcerpacket.ToString()));
+                            }
+                            else
+                            {
+                                Console.WriteLine("= = = [announcerpacket is null] = = =\n");
+                            }
                         }
-                        else
-                        {
-                            Console.WriteLine("= = = [announcerpacket is null] = = =\n");
-                        }
-
                     }
                     Thread.Sleep(1000);
                 }
@@ -80,14 +83,16 @@ namespace TauMulticastReferenceCSharp
                 {
                     if (MappingRead)
                     {
-                        TauObjects.MappingPacket mappingpacket = tau_multicast.GetMappingPacket();
-                        if (mappingpacket != null)
-                        {
-                            Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", mappingpacket.ToString()));
-                        }
-                        else
-                        {
-                            Console.WriteLine("= = = [mappingpacket is null] = = =\n");
+                        lock (tau_multicast.MappingLocker) { 
+                            TauObjects.MappingPacket mappingpacket = tau_multicast.GetMappingPacket();
+                            if (mappingpacket != null)
+                            {
+                                Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", mappingpacket.ToString()));
+                            }
+                            else
+                            {
+                                Console.WriteLine("= = = [mappingpacket is null] = = =\n");
+                            }
                         }
 
                     }
@@ -121,14 +126,16 @@ namespace TauMulticastReferenceCSharp
                 {
                     if (DebugRead)
                     {
-                        TauObjects.DebugPacket debugpacket = tau_multicast.GetDebugPacket();
-                        if (debugpacket != null)
-                        {
-                            Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", debugpacket.ToString()));
-                        }
-                        else
-                        {
-                            Console.WriteLine("= = = [debugpacket is null] = = =\n");
+                        lock (tau_multicast.DebugLocker) { 
+                            TauObjects.DebugPacket debugpacket = tau_multicast.GetDebugPacket();
+                            if (debugpacket != null)
+                            {
+                                Console.WriteLine(String.Format("= = = = = = = = = =\n{0}", debugpacket.ToString()));
+                            }
+                            else
+                            {
+                                Console.WriteLine("= = = [debugpacket is null] = = =\n");
+                            }
                         }
 
                     }

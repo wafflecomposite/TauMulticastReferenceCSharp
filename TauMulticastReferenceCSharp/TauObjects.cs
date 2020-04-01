@@ -7,7 +7,7 @@ using System.Text;
 
 namespace TauMulticastReferenceCSharp
 {
-    class TauObjects
+    public class TauObjects
     {
         public class AnnouncerDataSerializer
         {
@@ -103,6 +103,9 @@ namespace TauMulticastReferenceCSharp
 
             private string temp_map_str;
 
+            private List<int> module_serials_in_current_packet = new List<int>();
+            bool module_removal_in_process = false;
+
             public DataPacket()
             {
                 module_count = 0;
@@ -112,12 +115,17 @@ namespace TauMulticastReferenceCSharp
             public void ParseUpdate(BinaryReader br, MappingPacket mapping_packet = null)
             {
                 //BinaryReader br = new BinaryReader(packet_content_stream);
+                //foreach (Module module in modules){foreach (var sensor in module.sensors){ sensor.active = false; }}
+
+                module_serials_in_current_packet.Clear();
+
                 module_count = br.ReadByte();
 
                 for (int i = 0; i < module_count; i++)
                 {
                     Module cur_module = null;
                     int cur_module_serial = br.ReadUInt16();
+                    module_serials_in_current_packet.Add(cur_module_serial);
 
                     foreach (Module module in modules)
                     {
@@ -204,17 +212,37 @@ namespace TauMulticastReferenceCSharp
                         }
                     }
                 }
+
+                module_removal_in_process = true;
+
+                while (module_removal_in_process) {
+                    module_removal_in_process = false;
+                    foreach (Module module in modules)
+                    {
+                        if (!module_serials_in_current_packet.Contains(module.serial))
+                        {
+                            modules.Remove(module);
+                            module_removal_in_process = true;
+                            break;
+                        }
+                    }
+                }
+
                 initialized = true;
             }
 
             public void CopyFrom(DataPacket _packet)
             {
+                //foreach (Module module in modules) { foreach (var sensor in module.sensors) { sensor.active = false; } }
+                module_serials_in_current_packet.Clear();
+
                 module_count = _packet.module_count;
 
                 for (int i = 0; i < module_count; i++)
                 {
                     Module cur_module = null;
                     int cur_module_serial = _packet.modules[i].serial;
+                    module_serials_in_current_packet.Add(cur_module_serial);
 
                     foreach (Module module in modules)
                     {
@@ -301,6 +329,23 @@ namespace TauMulticastReferenceCSharp
                         }
                     }
                 }
+
+                module_removal_in_process = true;
+
+                while (module_removal_in_process)
+                {
+                    module_removal_in_process = false;
+                    foreach (Module module in modules)
+                    {
+                        if (!module_serials_in_current_packet.Contains(module.serial))
+                        {
+                            modules.Remove(module);
+                            module_removal_in_process = true;
+                            break;
+                        }
+                    }
+                }
+
                 initialized = true;
             }
 
